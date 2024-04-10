@@ -28,10 +28,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	native_errors "github.com/haproxytech/client-native/v5/errors"
-	"github.com/haproxytech/client-native/v5/misc"
-	"github.com/haproxytech/client-native/v5/models"
-	"github.com/haproxytech/client-native/v5/runtime/options"
+	native_errors "github.com/dhruvjain99/client-native/v5/errors"
+	"github.com/dhruvjain99/client-native/v5/misc"
+	"github.com/dhruvjain99/client-native/v5/models"
+	"github.com/dhruvjain99/client-native/v5/runtime/options"
 )
 
 // Client handles multiple HAProxy clients
@@ -354,6 +354,31 @@ func (c *client) DisableServer(backend, server string) error {
 	}
 	for _, runtime := range c.runtimes {
 		err := runtime.DisableServer(backend, server)
+		if err != nil {
+			return fmt.Errorf("%s %w", runtime.socketPath, err)
+		}
+	}
+	return nil
+}
+
+// EnableHealth starts active health checks to the server
+func (c *client) EnableHealth(backend, server string) error {
+	for _, runtime := range c.runtimes {
+		err := runtime.EnableHealth(backend, server)
+		if err != nil {
+			return fmt.Errorf("%s %w", runtime.socketPath, err)
+		}
+	}
+	return nil
+}
+
+// DisableHealth stops health checks to the server
+func (c *client) DisableHealth(backend, server string) error {
+	if len(c.runtimes) == 0 {
+		return fmt.Errorf("no valid runtimes found")
+	}
+	for _, runtime := range c.runtimes {
+		err := runtime.DisableHealth(backend, server)
 		if err != nil {
 			return fmt.Errorf("%s %w", runtime.socketPath, err)
 		}

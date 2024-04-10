@@ -21,7 +21,7 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 
-	"github.com/haproxytech/client-native/v5/models"
+	"github.com/dhruvjain99/client-native/v5/models"
 )
 
 // GetStats fetches HAProxy stats from runtime API

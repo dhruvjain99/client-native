@@ -19,7 +19,7 @@ import (
 	"strconv"
 
 	"github.com/go-openapi/strfmt"
-	"github.com/haproxytech/client-native/v5/models"
+	"github.com/dhruvjain99/client-native/v5/models"
 	parser "github.com/haproxytech/config-parser/v5"
 	"github.com/haproxytech/config-parser/v5/types"
 )

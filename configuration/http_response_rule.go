@@ -29,8 +29,8 @@ import (
 	http_actions "github.com/haproxytech/config-parser/v5/parsers/http/actions"
 	"github.com/haproxytech/config-parser/v5/types"
 
-	"github.com/haproxytech/client-native/v5/misc"
-	"github.com/haproxytech/client-native/v5/models"
+	"github.com/dhruvjain99/client-native/v5/misc"
+	"github.com/dhruvjain99/client-native/v5/models"
 )
 
 type HTTPResponseRule interface {

@@ -16,7 +16,7 @@ limitations under the License.
 
 package options
 
-import "github.com/haproxytech/client-native/v5/storage"
+import "github.com/dhruvjain99/client-native/v5/storage"
 
 type generalStore struct {
 	storage storage.Storage

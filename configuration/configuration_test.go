@@ -21,7 +21,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/haproxytech/client-native/v5/configuration/options"
+	"github.com/dhruvjain99/client-native/v5/configuration/options"
 )
 
 const testConf = `

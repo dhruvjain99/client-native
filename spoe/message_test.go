@@ -22,8 +22,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/haproxytech/client-native/v5/misc"
-	"github.com/haproxytech/client-native/v5/models"
+	"github.com/dhruvjain99/client-native/v5/misc"
+	"github.com/dhruvjain99/client-native/v5/models"
 )
 
 func TestSingleSpoe_GetMessages(t *testing.T) {

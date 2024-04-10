@@ -20,8 +20,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/haproxytech/client-native/v5/misc"
-	"github.com/haproxytech/client-native/v5/models"
+	"github.com/dhruvjain99/client-native/v5/misc"
+	"github.com/dhruvjain99/client-native/v5/models"
 )
 
 func TestGetTCPRequestRules(t *testing.T) { //nolint:gocognit,gocyclo

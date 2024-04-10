@@ -127,6 +127,9 @@ type Consul struct {
 	// Pattern: ^[^\s]+$
 	// +kubebuilder:validation:Pattern=`^[^\s]+$`
 	Token string `json:"token,omitempty"`
+
+	// server params for each service backend
+	ServerParams map[string]ServerParams `json:"server_params,omitempty"`
 }
 
 // Validate validates this consul

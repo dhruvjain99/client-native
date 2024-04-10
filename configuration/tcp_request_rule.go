@@ -30,8 +30,8 @@ import (
 	tcp_types "github.com/haproxytech/config-parser/v5/parsers/tcp/types"
 	"github.com/haproxytech/config-parser/v5/types"
 
-	"github.com/haproxytech/client-native/v5/misc"
-	"github.com/haproxytech/client-native/v5/models"
+	"github.com/dhruvjain99/client-native/v5/misc"
+	"github.com/dhruvjain99/client-native/v5/models"
 )
 
 type TCPRequestRule interface {

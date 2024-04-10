@@ -20,8 +20,8 @@ import (
 	"io"
 	"mime/multipart"
 
-	"github.com/haproxytech/client-native/v5/models"
-	"github.com/haproxytech/client-native/v5/runtime/options"
+	"github.com/dhruvjain99/client-native/v5/models"
+	"github.com/dhruvjain99/client-native/v5/runtime/options"
 )
 
 type Maps interface {
@@ -79,6 +79,10 @@ type Servers interface {
 	EnableServer(backend, server string) error
 	// DisableServer marks server as DOWN for maintenance
 	DisableServer(backend, server string) error
+	// EnableHealth starts health checks to the server
+	EnableHealth(backend, server string) error
+	// DisableHealth stops health checks to the server
+	DisableHealth(backend, server string) error
 	// SetServerAgentAddr set agent-addr for server
 	SetServerAgentAddr(backend, server string, addr string) error
 	// SetServerAgentSend set agent-send for server

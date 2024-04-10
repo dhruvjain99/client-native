@@ -20,9 +20,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/haproxytech/client-native/v5/errors"
-	"github.com/haproxytech/client-native/v5/misc"
-	"github.com/haproxytech/client-native/v5/models"
+	"github.com/dhruvjain99/client-native/v5/errors"
+	"github.com/dhruvjain99/client-native/v5/misc"
+	"github.com/dhruvjain99/client-native/v5/models"
 )
 
 // AddServer adds a new server to a backend
@@ -104,6 +104,18 @@ func (s *SingleRuntime) EnableServer(backend, server string) error {
 // DisableServer marks server as DOWN for maintenance
 func (s *SingleRuntime) DisableServer(backend, server string) error {
 	cmd := fmt.Sprintf("disable server %s/%s", backend, server)
+	return s.Execute(cmd)
+}
+
+// EnableHealth starts active health checks to the server
+func (s *SingleRuntime) EnableHealth(backend, server string) error {
+	cmd := fmt.Sprintf("enable health %s/%s", backend, server)
+	return s.Execute(cmd)
+}
+
+// DisableHealth stops health checks to the server
+func (s *SingleRuntime) DisableHealth(backend, server string) error {
+	cmd := fmt.Sprintf("disable health %s/%s", backend, server)
 	return s.Execute(cmd)
 }
 

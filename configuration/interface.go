@@ -26,7 +26,7 @@ import (
 	parser "github.com/haproxytech/config-parser/v5"
 	parser_options "github.com/haproxytech/config-parser/v5/options"
 
-	"github.com/haproxytech/client-native/v5/configuration/options"
+	"github.com/dhruvjain99/client-native/v5/configuration/options"
 )
 
 type Configuration interface {

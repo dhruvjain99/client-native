@@ -17,9 +17,12 @@ package configuration
 
 import (
 	"fmt"
+	"github.com/dhruvjain99/client-native/v5/runtime"
+	jsoniter "github.com/json-iterator/go"
+	"strings"
 
-	"github.com/haproxytech/client-native/v5/misc"
-	"github.com/haproxytech/client-native/v5/models"
+	"github.com/dhruvjain99/client-native/v5/misc"
+	"github.com/dhruvjain99/client-native/v5/models"
 )
 
 // ServiceGrowthTypeLinear indicates linear growth type in ScalingParams.
@@ -45,15 +48,17 @@ type serviceNode struct {
 // Service represents the mapping from a discovery service into a configuration backend.
 type Service struct {
 	client        Configuration
+	runtime       runtime.Runtime
 	name          string
 	nodes         []*serviceNode
 	usedNames     map[string]struct{}
 	transactionID string
 	scaling       ScalingParams
+	serverParams  models.ServerParams
 }
 
 type ServiceI interface {
-	NewService(name string, scaling ScalingParams) (*Service, error)
+	NewService(rc runtime.Runtime, name string, scaling ScalingParams, params models.ServerParams) (*Service, error)
 	DeleteService(name string)
 }
 
@@ -66,7 +71,7 @@ type ScalingParams struct {
 
 // NewService creates and returns a new Service instance.
 // name indicates the name of the service and only one Service instance with the given name can be created.
-func (c *client) NewService(name string, scaling ScalingParams) (*Service, error) {
+func (c *client) NewService(rc runtime.Runtime, name string, scaling ScalingParams, params models.ServerParams) (*Service, error) {
 	c.clientMu.Lock()
 	defer c.clientMu.Unlock()
 	if _, ok := c.services[name]; ok {
@@ -74,10 +79,12 @@ func (c *client) NewService(name string, scaling ScalingParams) (*Service, error
 	}
 	service := &Service{
 		client:    c,
+		runtime:   rc,
 		name:      name,
 		nodes:     make([]*serviceNode, 0),
 		usedNames: make(map[string]struct{}),
 		scaling:   scaling,
+		serverParams: params,
 	}
 	c.services[name] = service
 	return service, nil
@@ -269,6 +276,16 @@ func (s *Service) removeNodesAfterIndex(lastIndex int) error {
 		if err != nil {
 			return err
 		}
+
+		// Using runtime api to delete server
+		err = s.runtime.DisableServer(s.name, s.nodes[i].name)
+		if err != nil {
+			return err
+		}
+		err = s.runtime.DeleteServer(s.name, s.nodes[i].name)
+		if err != nil {
+			return err
+		}
 	}
 	s.nodes = s.nodes[:lastIndex]
 	return nil
@@ -320,10 +337,7 @@ func (s *Service) updateConfig() (bool, error) {
 				Name:    node.name,
 				Address: node.address,
 				Port:    misc.Ptr(node.port),
-				ServerParams: models.ServerParams{
-					Weight: misc.Int64P(128),
-					Check:  "enabled",
-				},
+				ServerParams: s.serverParams,
 			}
 			if node.disabled {
 				server.Maintenance = "enabled"
@@ -332,6 +346,34 @@ func (s *Service) updateConfig() (bool, error) {
 			if err != nil {
 				return false, err
 			}
+
+			// Using runtime api to update existing server
+			var ras models.RuntimeAddServer
+			err = ConvertStruct(server, &ras)
+			if err != nil {
+				return false, err
+			}
+			err = s.runtime.DisableServer(s.name, server.Name)
+			if err != nil {
+				return false, err
+			}
+			err = s.runtime.DeleteServer(s.name, server.Name)
+			if err != nil {
+				return false, err
+			}
+			err = s.runtime.AddServer(s.name, server.Name, SerializeRuntimeAddServer(&ras))
+			if err != nil {
+				return false, err
+			}
+			err = s.runtime.EnableHealth(s.name, server.Name)
+			if err != nil {
+				return false, err
+			}
+			err = s.runtime.EnableServer(s.name, server.Name)
+			if err != nil {
+				return false, err
+			}
+
 			node.modified = false
 			reload = true
 		}
@@ -389,6 +431,18 @@ func (s *Service) addNode() error {
 	if err != nil {
 		return err
 	}
+
+	// Using runtime api to add new servers
+	var ras models.RuntimeAddServer
+	err = ConvertStruct(server, &ras)
+	if err != nil {
+		return err
+	}
+	err = s.runtime.AddServer(s.name, server.Name, SerializeRuntimeAddServer(&ras))
+	if err != nil {
+		return err
+	}
+
 	s.nodes = append(s.nodes, &serviceNode{
 		name:     name,
 		address:  "127.0.0.1",
@@ -430,4 +484,262 @@ func (s *Service) swapDisabledNode(index int) {
 			break
 		}
 	}
+}
+
+// ConvertStruct tries to convert a struct from one type to another.
+func ConvertStruct[T1 any, T2 any](from T1, to T2) error {
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+	js, err := json.Marshal(from)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(js, to)
+}
+
+// SerializeRuntimeAddServer returns a string in the HAProxy config format, suitable
+// for the "add server" operation over the control socket.
+// Not all the Server attributes are available in this case.
+func SerializeRuntimeAddServer(srv *models.RuntimeAddServer) string { //nolint:cyclop,maintidx
+	b := &strings.Builder{}
+
+	push := func(s string) {
+		b.WriteByte(' ')
+		b.WriteString(s)
+	}
+	pushi := func(key string, val *int64) {
+		fmt.Fprintf(b, " %s %d", key, *val)
+	}
+	// push a quoted string
+	pushq := func(key, val string) {
+		fmt.Fprintf(b, ` %s %s`, key, val)
+	}
+	enabled := func(s string) bool {
+		return s == "enabled"
+	}
+
+	// Address is mandatory and must come first, with an optional port number.
+	addr := srv.Address
+	if srv.Port != nil {
+		addr += fmt.Sprintf(":%d", *srv.Port)
+	}
+	push(addr)
+
+	if enabled(srv.AgentCheck) {
+		push("agent-check")
+	}
+	if srv.AgentAddr != "" {
+		pushq("agent-addr", srv.AgentAddr)
+	}
+	if srv.AgentPort != nil {
+		pushi("agent-port", srv.AgentPort)
+	}
+	if srv.AgentInter != nil {
+		pushi("agent-inter", srv.AgentInter)
+	}
+	if srv.AgentSend != "" {
+		pushq("agent-send", srv.AgentSend)
+	}
+	if srv.Allow0rtt {
+		push("allow-0rtt")
+	}
+	if srv.Alpn != "" {
+		pushq("alpn", srv.Alpn)
+	}
+	if enabled(srv.Backup) {
+		push("backup")
+	}
+	if srv.SslCafile != "" {
+		pushq("ca-file", srv.SslCafile)
+	}
+	if enabled(srv.Check) {
+		push("check")
+	}
+	if srv.CheckAlpn != "" {
+		pushq("check-alpn", srv.CheckAlpn)
+	}
+	if srv.HealthCheckAddress != "" {
+		pushq("addr", srv.HealthCheckAddress)
+	}
+	if srv.HealthCheckPort != nil {
+		pushi("port", srv.HealthCheckPort)
+	}
+	if srv.CheckProto != "" {
+		pushq("check-proto", srv.CheckProto)
+	}
+	if enabled(srv.CheckSendProxy) {
+		push("check-send-proxy")
+	}
+	if srv.CheckSni != "" {
+		pushq("check-sni", srv.CheckSni)
+	}
+	if enabled(srv.CheckSsl) {
+		push("check-ssl")
+	}
+	if enabled(srv.CheckViaSocks4) {
+		push("check-via-socks4")
+	}
+	if srv.Ciphers != "" {
+		pushq("ciphers", srv.Ciphers)
+	}
+	if srv.Ciphersuites != "" {
+		pushq("ciphersuites", srv.Ciphersuites)
+	}
+	if srv.CrlFile != "" {
+		pushq("crl-file", srv.CrlFile)
+	}
+	if enabled(srv.Maintenance) {
+		push("disabled")
+	}
+	if srv.Downinter != nil {
+		pushi("downinter", srv.Downinter)
+	}
+	if !enabled(srv.Maintenance) {
+		push("enabled")
+	}
+	if srv.ErrorLimit != nil {
+		pushi("error-limit", srv.ErrorLimit)
+	}
+	if srv.Fall != nil {
+		pushi("fall", srv.Fall)
+	}
+	if srv.Fastinter != nil {
+		pushi("fastinter", srv.Fastinter)
+	}
+	if enabled(srv.ForceSslv3) {
+		push("force-sslv3")
+	}
+	if enabled(srv.ForceTlsv10) {
+		push("force-tlsv10")
+	}
+	if enabled(srv.ForceTlsv11) {
+		push("force-tlsv11")
+	}
+	if enabled(srv.ForceTlsv12) {
+		push("force-tlsv12")
+	}
+	if enabled(srv.ForceTlsv13) {
+		push("force-tlsv13")
+	}
+	if srv.ID != "" {
+		pushq("id", srv.ID)
+	}
+	if srv.Inter != nil {
+		pushi("inter", srv.Inter)
+	}
+	if srv.Maxconn != nil {
+		pushi("maxconn", srv.Maxconn)
+	}
+	if srv.Maxqueue != nil {
+		pushi("maxqueue", srv.Maxqueue)
+	}
+	if srv.Minconn != nil {
+		pushi("minconn", srv.Minconn)
+	}
+	if !enabled(srv.SslReuse) {
+		push("no-ssl-reuse")
+	}
+	if enabled(srv.NoSslv3) {
+		push("no-sslv3")
+	}
+	if enabled(srv.NoTlsv10) {
+		push("no-tlsv10")
+	}
+	if enabled(srv.NoTlsv11) {
+		push("no-tlsv11")
+	}
+	if enabled(srv.NoTlsv12) {
+		push("no-tlsv12")
+	}
+	if enabled(srv.NoTlsv13) {
+		push("no-tlsv13")
+	}
+	if !enabled(srv.TLSTickets) {
+		push("no-tls-tickets")
+	}
+	if srv.Npn != "" {
+		pushq("npm", srv.Npn)
+	}
+	if srv.Observe != "" {
+		pushq("observe", srv.Observe)
+	}
+	if srv.OnError != "" {
+		pushq("on-error", srv.OnError)
+	}
+	if srv.OnMarkedDown != "" {
+		pushq("on-marked-down", srv.OnMarkedDown)
+	}
+	if srv.OnMarkedUp != "" {
+		pushq("on-marked-up", srv.OnMarkedUp)
+	}
+	if srv.PoolLowConn != nil {
+		pushi("pool-low-conn", srv.PoolLowConn)
+	}
+	if srv.PoolMaxConn != nil {
+		pushi("pool-max-conn", srv.PoolMaxConn)
+	}
+	if srv.PoolPurgeDelay != nil {
+		pushi("pool-purge-delay", srv.PoolPurgeDelay)
+	}
+	if srv.Proto != "" {
+		pushq("proto", srv.Proto)
+	}
+	if len(srv.ProxyV2Options) > 0 {
+		pushq("proxy-v2-options", strings.Join(srv.ProxyV2Options, ","))
+	}
+	if srv.Rise != nil {
+		pushi("rise", srv.Rise)
+	}
+	if enabled(srv.SendProxy) {
+		push("send-proxy")
+	}
+	if enabled(srv.SendProxyV2) {
+		push("send-proxy-v2")
+	}
+	if enabled(srv.SendProxyV2Ssl) {
+		push("send-proxy-v2-ssl")
+	}
+	if enabled(srv.SendProxyV2SslCn) {
+		push("send-proxy-v2-ssl-cn")
+	}
+	if srv.Slowstart != nil {
+		pushi("slowstart", srv.Slowstart)
+	}
+	if srv.Sni != "" {
+		pushq("sni", srv.Sni)
+	}
+	if srv.Source != "" {
+		pushq("source", srv.Source)
+	}
+	if enabled(srv.Ssl) {
+		push("ssl")
+	}
+	if srv.SslMaxVer != "" {
+		pushq("ssl-max-ver", srv.SslMaxVer)
+	}
+	if srv.SslMinVer != "" {
+		pushq("ssl-min-ver", srv.SslMinVer)
+	}
+	if enabled(srv.Tfo) {
+		push("tfo")
+	}
+	if enabled(srv.TLSTickets) {
+		push("tls-tickets")
+	}
+	if srv.Track != "" {
+		pushq("track", srv.Track)
+	}
+	if srv.Verify != "" {
+		pushq("verify", srv.Verify)
+	}
+	if srv.Verifyhost != "" {
+		pushq("verifyhost", srv.Verifyhost)
+	}
+	if srv.Weight != nil {
+		pushi("weight", srv.Weight)
+	}
+	if srv.Ws != "" {
+		pushq("ws", srv.Ws)
+	}
+
+	return b.String()
 }

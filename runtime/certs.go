@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-openapi/strfmt"
 
-	native_errors "github.com/haproxytech/client-native/v5/errors"
-	"github.com/haproxytech/client-native/v5/models"
+	native_errors "github.com/dhruvjain99/client-native/v5/errors"
+	"github.com/dhruvjain99/client-native/v5/models"
 )
 
 // ShowCerts returns Certs files description from runtime

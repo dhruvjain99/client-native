@@ -1,4 +1,4 @@
-module github.com/haproxytech/client-native/v5
+module github.com/dhruvjain99/client-native/v5
 
 go 1.21
 

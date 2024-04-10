@@ -26,8 +26,8 @@ import (
 
 	"github.com/google/renameio"
 
-	conf "github.com/haproxytech/client-native/v5/configuration"
-	"github.com/haproxytech/client-native/v5/misc"
+	conf "github.com/dhruvjain99/client-native/v5/configuration"
+	"github.com/dhruvjain99/client-native/v5/misc"
 )
 
 type Spoe interface {
